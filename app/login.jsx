@@ -174,7 +174,7 @@ const LoginPage = () => {
           headerBackVisible: false,
         }}
       />
-      <View style={local.card}>
+      <View>
         <View style={local.logoContainer}>
           <MaterialIcons name="school" size={62} color="#3547a8" />
           <Text style={local.title}>Online Grading Portal</Text>
@@ -349,7 +349,7 @@ const local = StyleSheet.create({
     alignItems: 'flex-end',
     marginTop: 12,
     marginRight: 4,
-    marginBottom: 2,
+    marginBottom: 19,
   },
   forgotText: {
     color: '#9473e6',

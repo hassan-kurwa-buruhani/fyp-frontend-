@@ -1,9 +1,20 @@
 import React, { useState } from 'react';
-import { View, TextInput, Text, Button, StyleSheet, ScrollView, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  Modal,
+  Pressable,
+} from 'react-native';
 import { useAuth } from '../../context/AuthContext';
+import { MaterialIcons } from '@expo/vector-icons';
 
 export default function ProfileScreen() {
   const { user, updateUserProfile } = useAuth();
+
   const [formData, setFormData] = useState({
     first_name: user?.first_name || '',
     last_name: user?.last_name || '',
@@ -13,19 +24,23 @@ export default function ProfileScreen() {
   });
 
   const [loading, setLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
 
   const handleUpdate = async () => {
+    if (formData.new_password && formData.new_password !== formData.verify_password) {
+      Alert.alert('Error', 'Passwords do not match');
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await updateUserProfile(formData);
-      
       if (result.success) {
-        Alert.alert('Success', 'Profile updated successfully');
-        // Clear password fields after successful update
+        setModalVisible(false);
         setFormData(prev => ({
           ...prev,
           new_password: '',
-          verify_password: ''
+          verify_password: '',
         }));
       } else {
         Alert.alert('Error', result.error || 'Update failed');
@@ -42,51 +57,109 @@ export default function ProfileScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Profile</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="First Name"
-        value={formData.first_name}
-        onChangeText={text => setFormData({ ...formData, first_name: text })}
-      />
+      <View style={styles.card}>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Last Name"
-        value={formData.last_name}
-        onChangeText={text => setFormData({ ...formData, last_name: text })}
-      />
+      <View style={styles.row}>
+          <MaterialIcons name="alternate-email" size={24} color="#3F51B5" />
+          <Text style={styles.infoText}>{user?.username}</Text>
+        </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        keyboardType="email-address"
-        value={formData.email}
-        onChangeText={text => setFormData({ ...formData, email: text })}
-      />
+        <View style={styles.row}>
+          <MaterialIcons name="person" size={24} color="#3F51B5" />
+          <Text style={styles.infoText}>
+            {user?.first_name} {user?.last_name}
+          </Text>
+        </View>
 
-      <Text style={styles.section}>Change Password (optional)</Text>
+      
 
-      <TextInput
-        style={styles.input}
-        placeholder="New Password"
-        secureTextEntry
-        value={formData.new_password}
-        onChangeText={text => setFormData({ ...formData, new_password: text })}
-      />
+        <View style={styles.row}>
+          <MaterialIcons name="email" size={22} color="#3F51B5" />
+          <Text style={styles.infoText}>{user?.email}</Text>
+        </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Verify Password"
-        secureTextEntry
-        value={formData.verify_password}
-        onChangeText={text => setFormData({ ...formData, verify_password: text })}
-      />
+        <View style={styles.row}>
+          <MaterialIcons name="work" size={22} color="#3F51B5" />
+          <Text style={styles.infoText}>{user?.role}</Text>
+        </View>
 
-      <Button 
-        title={loading ? 'Updating...' : 'Update Profile'} 
-        onPress={handleUpdate} 
-        disabled={loading} 
-      />
+        <Pressable style={styles.editButton} onPress={() => setModalVisible(true)}>
+          <MaterialIcons name="edit" size={18} color="#fff" />
+          <Text style={styles.editButtonText}>Edit Profile</Text>
+        </Pressable>
+      </View>
+
+      {/* Update Modal */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Update Profile</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="First Name"
+              value={formData.first_name}
+              onChangeText={text => setFormData({ ...formData, first_name: text })}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Last Name"
+              value={formData.last_name}
+              onChangeText={text => setFormData({ ...formData, last_name: text })}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              keyboardType="email-address"
+              value={formData.email}
+              onChangeText={text => setFormData({ ...formData, email: text })}
+            />
+
+            <Text style={styles.section}>Change Password (optional)</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="New Password"
+              secureTextEntry
+              value={formData.new_password}
+              onChangeText={text => setFormData({ ...formData, new_password: text })}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Verify Password"
+              secureTextEntry
+              value={formData.verify_password}
+              onChangeText={text => setFormData({ ...formData, verify_password: text })}
+            />
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={handleUpdate}
+                disabled={loading}
+              >
+                <Text style={styles.saveText}>
+                  {loading ? 'Saving...' : 'Save'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -95,165 +168,106 @@ const styles = StyleSheet.create({
   container: {
     padding: 20,
     paddingTop: 60,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#f5f5f5',
     flexGrow: 1,
   },
   title: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: 'bold',
+    color: '#3F51B5',
     marginBottom: 20,
-    color: '#333',
     textAlign: 'center',
   },
-  input: {
+  card: {
     backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ccc',
+    borderRadius: 14,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 1, height: 2 },
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  infoText: {
+    fontSize: 16,
+    marginLeft: 12,
+    color: '#333',
+  },
+  editButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3F51B5',
+    padding: 10,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginTop: 10,
+  },
+  editButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 15,
+    textAlign: 'center',
+    color: '#333',
+  },
+  input: {
+    backgroundColor: '#f0f0f0',
     borderRadius: 10,
     paddingHorizontal: 15,
     paddingVertical: 12,
     fontSize: 16,
-    marginBottom: 15,
+    marginBottom: 12,
   },
   section: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    marginVertical: 10,
+    marginTop: 10,
+    marginBottom: 6,
     color: '#555',
   },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 15,
+  },
+  modalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  cancelButton: {
+    backgroundColor: '#ddd',
+    marginRight: 10,
+  },
+  cancelText: {
+    fontWeight: '600',
+    color: '#555',
+  },
+  saveButton: {
+    backgroundColor: '#3F51B5',
+  },
+  saveText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
 });
-
-
-// import React, { useEffect, useState } from 'react';
-// import { View, TextInput, Text, Button, StyleSheet, ScrollView, Alert } from 'react-native';
-// import axios from 'axios';
-// import { useAuth } from '../../context/AuthContext'
-// import { API_URL } from '@env';
-
-// export default function ProfileScreen() {
-//   const { user, tokens } = useAuth();
-//   const [formData, setFormData] = useState({
-//     first_name: user?.first_name || '',
-//     last_name: user?.last_name || '',
-//     email: user?.email || '',
-//     new_password: '',
-//     verify_password: '',
-//   });
-
-//   const [loading, setLoading] = useState(false);
-//   const baseUrl = API_URL;
-
-//   const handleUpdate = async () => {
-//     if (formData.new_password && formData.new_password !== formData.verify_password) {
-//       Alert.alert('Error', 'Passwords do not match.');
-//       return;
-//     }
-
-//     setLoading(true);
-//     try {
-//       const payload = {
-//         first_name: formData.first_name,
-//         last_name: formData.last_name,
-//         email: formData.email,
-//       };
-
-//       if (formData.new_password) {
-//         payload.new_password = formData.new_password;
-//         payload.verify_password = formData.verify_password;
-//       }
-
-//       await axios.put(`${baseUrl}/profile/${user.id}/`, payload, {
-//         headers: {
-//           Authorization: `Bearer ${tokens?.access}`,
-//         },
-//       });
-
-//       Alert.alert('Success', 'Profile updated successfully');
-//     } catch (error) {
-//       console.error('Update failed:', error.response?.data || error);
-//       Alert.alert('Error', 'Update failed. Check your input.');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <ScrollView contentContainerStyle={styles.container}>
-//       <Text style={styles.title}>Profile</Text>
-
-//       <TextInput
-//         style={styles.input}
-//         placeholder="First Name"
-//         value={formData.first_name}
-//         onChangeText={text => setFormData({ ...formData, first_name: text })}
-//       />
-
-//       <TextInput
-//         style={styles.input}
-//         placeholder="Last Name"
-//         value={formData.last_name}
-//         onChangeText={text => setFormData({ ...formData, last_name: text })}
-//       />
-
-//       <TextInput
-//         style={styles.input}
-//         placeholder="Email"
-//         keyboardType="email-address"
-//         value={formData.email}
-//         onChangeText={text => setFormData({ ...formData, email: text })}
-//       />
-
-//       <Text style={styles.section}>Change Password (optional)</Text>
-
-//       <TextInput
-//         style={styles.input}
-//         placeholder="New Password"
-//         secureTextEntry
-//         value={formData.new_password}
-//         onChangeText={text => setFormData({ ...formData, new_password: text })}
-//       />
-
-//       <TextInput
-//         style={styles.input}
-//         placeholder="Verify Password"
-//         secureTextEntry
-//         value={formData.verify_password}
-//         onChangeText={text => setFormData({ ...formData, verify_password: text })}
-//       />
-
-//       <Button title={loading ? 'Updating...' : 'Update Profile'} onPress={handleUpdate} disabled={loading} />
-//     </ScrollView>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   container: {
-//     padding: 20,
-//     paddingTop: 60,
-//     backgroundColor: '#f9f9f9',
-//     flexGrow: 1,
-//   },
-//   title: {
-//     fontSize: 26,
-//     fontWeight: 'bold',
-//     marginBottom: 20,
-//     color: '#333',
-//     textAlign: 'center',
-//   },
-//   input: {
-//     backgroundColor: '#fff',
-//     borderWidth: 1,
-//     borderColor: '#ccc',
-//     borderRadius: 10,
-//     paddingHorizontal: 15,
-//     paddingVertical: 12,
-//     fontSize: 16,
-//     marginBottom: 15,
-//   },
-//   section: {
-//     fontSize: 18,
-//     fontWeight: '600',
-//     marginVertical: 10,
-//     color: '#555',
-//   },
-// });

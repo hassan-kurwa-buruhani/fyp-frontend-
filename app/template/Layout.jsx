@@ -1,35 +1,38 @@
-// app/template/Layout.jsx
 import React from 'react';
-import { View } from 'react-native';
-import Drawer from './Drawer';
+import { View, Text } from 'react-native'; // Make sure Text is imported
 import Header from './Header';
+import BottomNav from './BottomNav';
 import { ThemeProvider, useTheme } from '../constants/ThemeContext';
 import { Slot } from 'expo-router';
-import BottomNav from './BottomNav';
 
-// Inner layout component to consume theme and apply only themed styles
+// Inner layout that applies theming and includes header and bottom nav
 const ThemedLayout = () => {
-  const { theme } = useTheme(); 
+  const { theme } = useTheme();
+
+  // Add error handling in case theme is not available
+  if (!theme) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Loading theme...</Text>
+      </View>
+    );
+  }
 
   return (
-    <Drawer>
-      {({ openDrawer }) => (
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: theme.colors.background,
-            paddingHorizontal: 16,
-            paddingTop: 12,
-          }}
-        >
-          <Header onMenuPress={openDrawer} />
-          <View style={{ flex: 1 }}>
-            <Slot />
-          </View>
-          <BottomNav />
-        </View>
-      )}
-    </Drawer>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: theme.colors.background,
+        paddingHorizontal: 2,
+        paddingTop: 12,
+      }}
+    >
+      <Header onMenuPress={() => {}} />
+      <View style={{ flex: 1 }}>
+        <Slot />
+      </View>
+      <BottomNav />
+    </View>
   );
 };
 

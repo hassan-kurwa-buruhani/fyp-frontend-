@@ -1,9 +1,12 @@
 import { Stack } from 'expo-router';
 import { AuthProvider } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
+import { Provider as PaperProvider } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Toast from 'react-native-toast-message';
+import toastConfig from './constants/toastConfig'; // Make sure this is the correct path
 
 export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
@@ -37,24 +40,27 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          {showOnboarding ? (
-            <Stack.Screen name="onboarding" />
-          ) : (
-            <>
-              <Stack.Screen name="index" />
+        <PaperProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            {showOnboarding ? (
               <Stack.Screen name="onboarding" />
-              <Stack.Screen name="login" />
-              <Stack.Screen name="contact" />
-              <Stack.Screen name="(public)" />
-              <Stack.Screen name="(student)" />
-              <Stack.Screen name="(lecturer)" />
-              <Stack.Screen name="(invigilator)" />
-              <Stack.Screen name="(admin)" />
-            </>
-          )}
-        </Stack>
+            ) : (
+              <>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="onboarding" />
+                <Stack.Screen name="login" />
+                <Stack.Screen name="contact" />
+                <Stack.Screen name="(public)" />
+                <Stack.Screen name="(student)" />
+                <Stack.Screen name="(lecturer)" />
+                <Stack.Screen name="(invigilator)" />
+                <Stack.Screen name="(admin)" />
+              </>
+            )}
+          </Stack>
+        </PaperProvider>
       </AuthProvider>
+      <Toast config={toastConfig} />
     </GestureHandlerRootView>
   );
 }

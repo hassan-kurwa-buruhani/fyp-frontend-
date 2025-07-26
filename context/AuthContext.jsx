@@ -3,7 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as Location from 'expo-location';
 import * as Device from 'expo-device';
+import Toast from 'react-native-toast-message';
 import { API_URL } from '@env';
+import { toastConfig } from '../app/constants/toastConfig';
 
 const AuthContext = createContext();
 
@@ -14,6 +16,17 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   const baseUrl = API_URL;
+
+  // Helper function for showing toast
+  const showToast = (type, message) => {
+    Toast.show({
+      type,
+      text1: message,
+      position: 'bottom',
+      visibilityTime: 3000,
+      autoHide: true,
+    });
+  };
 
   // Check if user is authenticated
   const isAuthenticated = () => {
@@ -40,6 +53,7 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (error) {
         console.error('Failed to load auth data:', error);
+        showToast('error', 'Failed to load your session data');
       } finally {
         setIsLoading(false);
       }
@@ -48,50 +62,11 @@ export const AuthProvider = ({ children }) => {
     loadAuthData();
   }, []);
 
-  const updateUserProfile = async (userData) => {
-    setIsLoading(true);
-    try {
-      const { new_password, verify_password, ...profileData } = userData;
-      const payload = { ...profileData };
-
-      if (new_password && verify_password) {
-        if (new_password !== verify_password) {
-          throw new Error('Passwords do not match');
-        }
-        payload.new_password = new_password;
-        payload.verify_password = verify_password;
-      }
-
-      const response = await axios.put(`${baseUrl}/profile/${user.id}/`, payload, {
-        headers: {
-          Authorization: `Bearer ${tokens?.access}`,
-        },
-      });
-
-      // Update user data in context and storage
-      const updatedUser = { ...user, ...profileData };
-      setUser(updatedUser);
-      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
-
-      return { success: true, data: response.data };
-    } catch (error) {
-      console.error('Profile update failed:', error);
-      return { 
-        success: false, 
-        error: error.response?.data || error.message || 'Update failed' 
-      };
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Function to handle login
   const login = async (username, password) => {
     setIsLoading(true);
     setError(null);
   
     try {
-      // Get device location
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         throw { 
@@ -121,9 +96,7 @@ export const AuthProvider = ({ children }) => {
         latitude: latitude.toString(),
         longitude: longitude.toString()
       }).catch(error => {
-        // Handle backend-specific error responses
         if (error.response && error.response.data) {
-          // Handle non_field_errors
           if (error.response.data.non_field_errors) {
             throw {
               message: error.response.data.non_field_errors.join(', '),
@@ -131,7 +104,6 @@ export const AuthProvider = ({ children }) => {
               details: error.response.data
             };
           }
-          // Handle field-specific errors
           const fieldErrors = Object.entries(error.response.data)
             .filter(([key]) => key !== 'non_field_errors')
             .map(([key, value]) => `${key}: ${value.join(', ')}`);
@@ -161,57 +133,104 @@ export const AuthProvider = ({ children }) => {
       setTokens(authTokens);
       setUser(userData);
       axios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
+
+      showToast('success', `Welcome back, ${userData.first_name || userData.username}!`);
   
       return userData;
     } catch (error) {
       console.error('Login error:', error);
       setError(error);
+      showToast('error', error.message || 'Invalid credentials or network error');
       throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Function to handle registration
   const register = async (userData) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await axios.post('YOUR_REGISTER_ENDPOINT', userData);
+      const response = await axios.post(`${baseUrl}/register/`, userData);
+      
+      showToast('success', `Welcome ${userData.first_name || userData.username}! Account created.`);
+      
       return response.data;
     } catch (error) {
       console.error('Registration error:', error);
       setError(error.response?.data || error.message);
+      showToast('error', error.response?.data?.detail || error.message || 'Registration failed');
       throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Function to handle logout
-  const logout = async () => {
+  const updateUserProfile = async (userData) => {
     setIsLoading(true);
     try {
-      await AsyncStorage.multiRemove(['tokens', 'user']);
-      setUser(null);
-      setTokens(null);
-      delete axios.defaults.headers.common['Authorization'];
+      const { new_password, verify_password, ...profileData } = userData;
+      const payload = { ...profileData };
+
+      if (new_password && verify_password) {
+        if (new_password !== verify_password) {
+          throw new Error('Passwords do not match');
+        }
+        payload.new_password = new_password;
+        payload.verify_password = verify_password;
+      }
+
+      const response = await axios.put(`${baseUrl}/profile/${user.id}/`, payload, {
+        headers: {
+          Authorization: `Bearer ${tokens?.access}`,
+        },
+      });
+
+      const updatedUser = { ...user, ...profileData };
+      setUser(updatedUser);
+      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+
+      showToast('success', `Profile updated successfully, ${updatedUser.first_name || updatedUser.username}!`);
+
+      return { success: true, data: response.data };
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Profile update failed:', error);
+      showToast('error', error.response?.data?.detail || error.message || 'Update failed');
+      return { 
+        success: false, 
+        error: error.response?.data || error.message || 'Update failed' 
+      };
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Function to refresh access token
+  const logout = async () => {
+    setIsLoading(true);
+    try {
+      const username = user?.username || 'User';
+      await AsyncStorage.multiRemove(['tokens', 'user']);
+      setUser(null);
+      setTokens(null);
+      delete axios.defaults.headers.common['Authorization'];
+      
+      showToast('info', `Goodbye ${username}! You've been logged out.`);
+    } catch (error) {
+      console.error('Logout error:', error);
+      showToast('error', 'There was an issue logging out. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const refreshToken = async () => {
     try {
       if (!tokens?.refresh) {
         throw new Error('No refresh token available');
       }
 
-      const response = await axios.post('http://192.168.0.177:8000/api/token/refresh/', {
+      const response = await axios.post(`${baseUrl}/token/refresh/`, {
         refresh: tokens.refresh
       });
 
@@ -227,6 +246,7 @@ export const AuthProvider = ({ children }) => {
       return newTokens.access;
     } catch (error) {
       console.error('Token refresh failed:', error);
+      showToast('error', 'Session expired. Please log in again.');
       await logout();
       throw error;
     }
@@ -250,6 +270,7 @@ export const AuthProvider = ({ children }) => {
       }}
     >
       {children}
+      <Toast config={toastConfig} />
     </AuthContext.Provider>
   );
 };
