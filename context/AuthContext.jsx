@@ -62,7 +62,7 @@ export const AuthProvider = ({ children }) => {
     loadAuthData();
   }, []);
 
-  const login = async (username, password) => {
+  const login = async (email, password) => {
     setIsLoading(true);
     setError(null);
   
@@ -90,28 +90,48 @@ export const AuthProvider = ({ children }) => {
       const deviceId = Device.osBuildId || 'unknown';
   
       const response = await axios.post(`${baseUrl}/login/`, {
-        username,
+        email,  // Changed from username to email
         password,
         device_id: deviceId,
         latitude: latitude.toString(),
         longitude: longitude.toString()
       }).catch(error => {
         if (error.response && error.response.data) {
-          if (error.response.data.non_field_errors) {
+          // Handle field-specific errors
+          if (error.response.data.email) {
             throw {
-              message: error.response.data.non_field_errors.join(', '),
-              type: 'backend',
+              message: error.response.data.email.join(', '),
+              type: 'email',
               details: error.response.data
             };
           }
-          const fieldErrors = Object.entries(error.response.data)
-            .filter(([key]) => key !== 'non_field_errors')
-            .map(([key, value]) => `${key}: ${value.join(', ')}`);
-          
-          if (fieldErrors.length > 0) {
+          if (error.response.data.password) {
             throw {
-              message: fieldErrors.join('\n'),
-              type: 'validation',
+              message: error.response.data.password.join(', '),
+              type: 'password',
+              details: error.response.data
+            };
+          }
+          if (error.response.data.device_id) {
+            throw {
+              message: error.response.data.device_id.join(', '),
+              type: 'device',
+              details: error.response.data
+            };
+          }
+          if (error.response.data.location) {
+            throw {
+              message: error.response.data.location.join(', '),
+              type: 'location',
+              details: error.response.data
+            };
+          }
+          
+          // Handle non-field errors
+          if (error.response.data.detail) {
+            throw {
+              message: error.response.data.detail,
+              type: 'backend',
               details: error.response.data
             };
           }
@@ -134,13 +154,26 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       axios.defaults.headers.common['Authorization'] = `Bearer ${access}`;
 
-      showToast('success', `Welcome back, ${userData.first_name || userData.username}!`);
+      showToast('success', `Welcome back, ${userData.first_name || userData.email.split('@')[0]}!`);
   
       return userData;
     } catch (error) {
       console.error('Login error:', error);
       setError(error);
-      showToast('error', error.message || 'Invalid credentials or network error');
+      
+      // More specific error messages based on error type
+      let toastMessage = error.message || 'Login failed';
+      if (error.type === 'email') {
+        toastMessage = 'Email error: ' + error.message;
+      } else if (error.type === 'password') {
+        toastMessage = 'Password error: ' + error.message;
+      } else if (error.type === 'device') {
+        toastMessage = 'Device error: ' + error.message;
+      } else if (error.type === 'location') {
+        toastMessage = 'Location error: ' + error.message;
+      }
+      
+      showToast('error', toastMessage);
       throw error;
     } finally {
       setIsLoading(false);
@@ -154,13 +187,19 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await axios.post(`${baseUrl}/register/`, userData);
       
-      showToast('success', `Welcome ${userData.first_name || userData.username}! Account created.`);
+      showToast('success', `Welcome ${userData.first_name || userData.email.split('@')[0]}! Account created.`);
       
       return response.data;
     } catch (error) {
       console.error('Registration error:', error);
       setError(error.response?.data || error.message);
-      showToast('error', error.response?.data?.detail || error.message || 'Registration failed');
+      
+      let toastMessage = error.response?.data?.detail || error.message || 'Registration failed';
+      if (error.response?.data?.email) {
+        toastMessage = 'Email error: ' + error.response.data.email.join(', ');
+      }
+      
+      showToast('error', toastMessage);
       throw error;
     } finally {
       setIsLoading(false);
@@ -191,7 +230,7 @@ export const AuthProvider = ({ children }) => {
       setUser(updatedUser);
       await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
 
-      showToast('success', `Profile updated successfully, ${updatedUser.first_name || updatedUser.username}!`);
+      showToast('success', `Profile updated successfully, ${updatedUser.first_name || updatedUser.email.split('@')[0]}!`);
 
       return { success: true, data: response.data };
     } catch (error) {
@@ -209,13 +248,13 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     setIsLoading(true);
     try {
-      const username = user?.username || 'User';
+      const name = user?.first_name || user?.email.split('@')[0] || 'User';
       await AsyncStorage.multiRemove(['tokens', 'user']);
       setUser(null);
       setTokens(null);
       delete axios.defaults.headers.common['Authorization'];
       
-      showToast('info', `Goodbye ${username}! You've been logged out.`);
+      showToast('info', `Goodbye ${name}! You've been logged out.`);
     } catch (error) {
       console.error('Logout error:', error);
       showToast('error', 'There was an issue logging out. Please try again.');

@@ -15,8 +15,6 @@ import { router, Stack } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { KeyboardAvoidingView, Platform } from 'react-native';
 
-
-// --- Floating Label Input with animation like Google's Material Textfields ---
 const FloatingLabelInput = ({
   label,
   value,
@@ -95,6 +93,7 @@ const FloatingLabelInput = ({
         editable={editable}
         placeholder=""
         selectionColor="#525ad6"
+        keyboardType={label.toLowerCase() === 'email' ? 'email-address' : 'default'}
       />
       {typeof showPassword === 'boolean' && onToggleVisibility && (
         <TouchableOpacity
@@ -113,19 +112,26 @@ const FloatingLabelInput = ({
 };
 
 const LoginPage = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error, setError } = useAuth();
 
   const handleLogin = async () => {
     setError(null);
-    if (!username || !password) {
-      setError({ message: 'Please enter both username and password' });
+    if (!email || !password) {
+      setError({ message: 'Please enter both email and password' });
       return;
     }
+    
+    // Basic email validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError({ message: 'Please enter a valid email address' });
+      return;
+    }
+
     try {
-      const user = await login(username, password);
+      const user = await login(email, password);
       switch (user.role) {
         case 'Student':
           router.replace('/(student)/home');
@@ -158,72 +164,72 @@ const LoginPage = () => {
 
   return (
     <KeyboardAvoidingView
-    style={{ flex: 1 }}
-    behavior={Platform.OS === "ios" ? "padding" : "height"}
-    keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
-    <ScrollView
-      contentContainerStyle={local.container}
-      keyboardShouldPersistTaps="handled"
-      bounces={false}
-    >
-      <View style={local.backgroundShape} pointerEvents="none" />
-      <Stack.Screen
-        options={{
-          title: 'Login',
-          headerBackVisible: false,
-        }}
-      />
-      <View>
-        <View style={local.logoContainer}>
-          <MaterialIcons name="school" size={62} color="#3547a8" />
-          <Text style={local.title}>Online Grading Portal</Text>
-          <Text style={local.subtitle}>Academic Excellence, Digitally</Text>
+      <ScrollView
+        contentContainerStyle={local.container}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
+      >
+        <View style={local.backgroundShape} pointerEvents="none" />
+        <Stack.Screen
+          options={{
+            title: 'Login',
+            headerBackVisible: false,
+          }}
+        />
+        <View>
+          <View style={local.logoContainer}>
+            <MaterialIcons name="school" size={62} color="#3547a8" />
+            <Text style={local.title}>Online Grading Portal</Text>
+            <Text style={local.subtitle}>Academic Excellence, Digitally</Text>
+          </View>
+          {renderError()}
+          <FloatingLabelInput
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            editable={!isLoading}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <FloatingLabelInput
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            editable={!isLoading}
+            showPassword={showPassword}
+            onToggleVisibility={() => setShowPassword((v) => !v)}
+          />
+          <Pressable
+            style={({ pressed }) => [
+              local.button,
+              isLoading && local.buttonDisabled,
+              pressed && local.buttonPressed,
+            ]}
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={local.buttonText}>Login</Text>
+            )}
+          </Pressable>
+          <TouchableOpacity style={local.forgotLink}>
+            <Text style={local.forgotText}>Forgot Password?</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/contact')}>
+            <Text style={local.footerText}>
+              Need help? Contact{' '}
+              <Text style={{ color: "#3547a8", fontWeight: '700' }}>support</Text>
+            </Text>
+          </TouchableOpacity>
         </View>
-        {renderError()}
-        <FloatingLabelInput
-          label="username"
-          value={username}
-          onChangeText={setUsername}
-          editable={!isLoading}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        <FloatingLabelInput
-          label="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          editable={!isLoading}
-          showPassword={showPassword}
-          onToggleVisibility={() => setShowPassword((v) => !v)}
-        />
-        <Pressable
-          style={({ pressed }) => [
-            local.button,
-            isLoading && local.buttonDisabled,
-            pressed && local.buttonPressed,
-          ]}
-          onPress={handleLogin}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={local.buttonText}>Login</Text>
-          )}
-        </Pressable>
-        <TouchableOpacity style={local.forgotLink}>
-          <Text style={local.forgotText}>Forgot Password?</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push('/contact')}>
-        <Text style={local.footerText}>
-        Need help? Contact{' '}
-        <Text style={{ color: "#3547a8", fontWeight: '700' }}>support</Text>
-        </Text>
-    </TouchableOpacity>
-      </View>
-    </ScrollView>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
@@ -246,7 +252,6 @@ const local = StyleSheet.create({
     bottom: 0,
     zIndex: -1,
     backgroundColor: 'white',
-    // Simulate diagonal dark blue overlay
     borderTopRightRadius: 350,
     backgroundColor: '#f4f7fa',
     borderTopLeftRadius: 0,

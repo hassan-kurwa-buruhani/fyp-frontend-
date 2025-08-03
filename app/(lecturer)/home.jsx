@@ -107,6 +107,16 @@ export default function LecturerHome() {
         </View>
       </View>
 
+
+      <TouchableOpacity
+        style={[styles.button, styles.outlineButton, styles.logoutButton]}
+        onPress={() => {
+          router.push('/(lecturer)/answers');
+        }}
+      >
+        <Text style={styles.outlineButtonText}>Generate Answers</Text>
+      </TouchableOpacity>
+
       {/* Logout Button */}
       <TouchableOpacity
         style={[styles.button, styles.outlineButton, styles.logoutButton]}

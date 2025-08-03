@@ -83,15 +83,6 @@ export default function ProfileScreen() {
           <Text style={styles.infoText}>{user?.role}</Text>
         </View>
 
-        <View style={styles.row}>
-          <MaterialIcons
-            name={user?.gender === 'Male' ? 'male' : 'female'}
-            size={22}
-            color={user?.gender === 'Male' ? '#2196F3' : '#E91E63'}
-          />
-          <Text style={styles.infoText}>{user?.gender}</Text>
-        </View>
-
         <Pressable style={styles.editButton} onPress={() => setModalVisible(true)}>
           <MaterialIcons name="edit" size={18} color="#fff" />
           <Text style={styles.editButtonText}>Edit Profile</Text>
