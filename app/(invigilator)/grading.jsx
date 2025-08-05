@@ -1,14 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  FlatList,
-  Alert,
-  ScrollView,
-  TextInput,
+  View, Text, StyleSheet, TouchableOpacity, Image,
+  FlatList, Alert, ScrollView, TextInput, ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Camera } from 'expo-camera';
@@ -21,13 +14,37 @@ const GradingScreen = () => {
   const { examId, examTitle, courseCode, courseName, examDate, examTime } = useLocalSearchParams();
   const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [studentId, setStudentId] = useState('');
-  const { tokens, user } = useAuth(); // assumes user object has id & role info
+  const [students, setStudents] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedStudent, setSelectedStudent] = useState('');
+  const [loadingStudents, setLoadingStudents] = useState(true);
+  const { tokens, user } = useAuth();
+
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/exams/${examId}/`, {
+          headers: {
+            Authorization: `Bearer ${tokens.access}`,
+          },
+        });
+
+        setStudents(response.data.students_pending_submission || []);
+      } catch (error) {
+        console.error('Failed to fetch students:', error.response?.data || error.message);
+        Alert.alert('Error', 'Failed to fetch student list');
+      } finally {
+        setLoadingStudents(false);
+      }
+    };
+
+    fetchStudents();
+  }, [examId, tokens.access]);
 
   const pickFromCamera = async () => {
     const { status } = await Camera.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      alert('Camera permission is required');
+      Alert.alert('Permission required', 'Camera access is needed.');
       return;
     }
 
@@ -42,19 +59,20 @@ const GradingScreen = () => {
   };
 
   const handleUpload = async () => {
-    if (images.length === 0) {
-      Alert.alert('Missing Images', 'Please scan at least one image.');
+    if (!selectedStudent) {
+      Alert.alert('Student Missing', 'Select a student before submitting.');
       return;
     }
 
-    if (!studentId) {
-      Alert.alert('Missing Student ID', 'Please enter a valid student ID.');
+    if (images.length === 0) {
+      Alert.alert('No Images', 'Please scan at least one page.');
       return;
     }
 
     setUploading(true);
 
     const formData = new FormData();
+
     images.forEach((img, idx) => {
       formData.append('images', {
         uri: img.uri,
@@ -64,7 +82,7 @@ const GradingScreen = () => {
     });
 
     formData.append('exam_id', examId);
-    formData.append('student_id', studentId);
+    formData.append('student_registration_number', selectedStudent);
     formData.append('invigilator_id', user?.id);
 
     try {
@@ -75,16 +93,20 @@ const GradingScreen = () => {
         },
       });
 
-      Alert.alert('Success ✅', 'Images uploaded and PDF created!');
+      Alert.alert('✅ Success', 'PDF created and uploaded!');
       setImages([]);
-      setStudentId('');
+      setSelectedStudent('');
     } catch (err) {
-      console.error('Upload error:', err.response?.data || err.message);
-      Alert.alert('Error ❌', 'Upload failed. Check server or fields.');
+      console.error('Upload failed:', err.response?.data || err.message);
+      Alert.alert('❌ Upload Failed', 'Check fields or server.');
     } finally {
       setUploading(false);
     }
   };
+
+  const filteredStudents = students.filter(reg =>
+    reg.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -92,21 +114,53 @@ const GradingScreen = () => {
       <Text style={styles.subTitle}>{courseCode} - {courseName}</Text>
       <Text style={styles.detail}>Date: {examDate} | Time: {examTime}</Text>
 
+      <Text style={styles.label}>🎓 Select Student (by Reg Number)</Text>
       <TextInput
-        placeholder="Enter Student ID"
-        value={studentId}
-        onChangeText={setStudentId}
+        placeholder="Search Student Reg Number"
+        value={searchQuery}
+        onChangeText={setSearchQuery}
         style={styles.input}
-        keyboardType="numeric"
       />
 
-      <TouchableOpacity style={styles.scanButton} onPress={pickFromCamera}>
-        <Text style={styles.scanButtonText}>📷 Scan Answer Sheet</Text>
-      </TouchableOpacity>
+      {loadingStudents ? (
+        <ActivityIndicator size="large" color="#007bff" />
+      ) : students.length === 0 ? (
+        <Text style={styles.emptyMessage}>🎉 All students answers have been submitted.</Text>
+      ) : (
+        <FlatList
+          data={filteredStudents}
+          keyExtractor={(item, idx) => idx.toString()}
+          style={styles.studentList}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[
+                styles.studentItem,
+                selectedStudent === item && { backgroundColor: '#007bff' },
+              ]}
+              onPress={() => setSelectedStudent(item)}
+            >
+              <Text
+                style={[
+                  styles.studentText,
+                  selectedStudent === item && { color: '#fff' },
+                ]}
+              >
+                {item}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
+      )}
+
+      {students.length > 0 && (
+        <TouchableOpacity style={styles.scanButton} onPress={pickFromCamera}>
+          <Text style={styles.scanButtonText}>📷 Scan Answer Sheet</Text>
+        </TouchableOpacity>
+      )}
 
       {images.length > 0 && (
         <>
-          <Text style={styles.previewLabel}>Scanned Pages:</Text>
+          <Text style={styles.previewLabel}>📄 Scanned Pages:</Text>
           <FlatList
             data={images}
             keyExtractor={(_, idx) => idx.toString()}
@@ -153,13 +207,41 @@ const styles = StyleSheet.create({
     color: '#6c757d',
     marginBottom: 20,
   },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#212529',
+  },
   input: {
     borderWidth: 1,
     borderColor: '#ced4da',
     padding: 12,
     borderRadius: 8,
-    marginBottom: 20,
+    marginBottom: 10,
     backgroundColor: '#fff',
+  },
+  studentList: {
+    maxHeight: 180,
+    marginBottom: 20,
+  },
+  studentItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#dee2e6',
+    backgroundColor: '#e9ecef',
+  },
+  studentText: {
+    fontSize: 15,
+    color: '#212529',
+  },
+  emptyMessage: {
+    fontSize: 16,
+    fontStyle: 'italic',
+    color: '#28a745',
+    textAlign: 'center',
+    marginTop: 20,
+    marginBottom: 20,
   },
   scanButton: {
     backgroundColor: '#007bff',
