@@ -1,8 +1,16 @@
 import { View, ScrollView, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import axios from 'axios';
+import { API_URL } from '@env';
 
 export default function LecturerHome() {
+  const [courses, setCourses] = useState([]);
+  const [exams, setExams] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
   // Add error boundary for useAuth
   let auth;
   try {
@@ -17,26 +25,65 @@ export default function LecturerHome() {
   }
 
   // Destructure after ensuring auth exists
-  const { user, logout, isLoading: authLoading } = auth || {};
+  const { user, isLoading: authLoading, tokens } = auth || {};
 
-  // Sample card data
+  useEffect(() => {
+    if (!tokens?.access) return;
+
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        // Fetch both courses and exams in parallel
+        const [coursesResponse, examsResponse] = await Promise.all([
+          axios.get(`${API_URL}/lecturer-course/`, {
+            headers: {
+              Authorization: `Bearer ${tokens.access}`,
+            },
+          }),
+          axios.get(`${API_URL}/exams/`, {
+            headers: {
+              Authorization: `Bearer ${tokens.access}`,
+            },
+          })
+        ]);
+        
+        setCourses(coursesResponse.data);
+        setExams(examsResponse.data);
+        setError(null);
+      } catch (err) {
+        console.error('Failed to fetch data:', err);
+        setError('Failed to load data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [tokens]);
+
+  // Calculate total students across all courses
+  const totalStudents = courses.reduce((total, course) => {
+    return total + (course.students?.length || 0);
+  }, 0);
+
+  // Card data with real values
   const cards = [
     {
       title: 'Active Courses',
-      value: '4',
+      value: courses.length.toString(),
       subtitle: 'This semester',
       color: '#3F51B5' // primary
     },
     {
       title: 'Students',
-      value: '87',
+      value: totalStudents.toString(),
       subtitle: 'Total enrolled',
       color: '#009688' // secondary
     },
     {
-      title: 'Assignments',
-      value: '12',
-      subtitle: 'Pending grading',
+      title: 'Exams',
+      value: exams.length.toString(),
+      subtitle: 'Exams already registered',
       color: '#FF5722' // accent
     },
     {
@@ -47,10 +94,28 @@ export default function LecturerHome() {
     }
   ];
 
-  if (authLoading) {
+  if (authLoading || loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3F51B5" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity
+          style={[styles.button, styles.outlineButton]}
+          onPress={() => {
+            setLoading(true);
+            setError(null);
+            fetchData();
+          }}
+        >
+          <Text style={styles.outlineButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -91,47 +156,70 @@ export default function LecturerHome() {
         ))}
       </View>
 
-      {/* Performance Chart */}
+      {/* Recent Courses */}
       <View style={styles.chartCard}>
-        <Text style={styles.cardHeading}>Performance Overview</Text>
-        <View style={styles.chartPlaceholder}>
-          <Text style={styles.placeholderText}>Chart will be displayed here</Text>
-        </View>
+        <Text style={styles.cardHeading}>Your Courses</Text>
+        {courses.length > 0 ? (
+          courses.slice(0, 3).map(course => (
+            <View key={course.id} style={styles.courseItem}>
+              <Text style={styles.courseCode}>{course.code}</Text>
+              <Text style={styles.courseName}>{course.name}</Text>
+              <Text style={styles.courseStudents}>
+                {course.students?.length || 0} students
+              </Text>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.placeholderText}>No courses assigned</Text>
+        )}
+        {courses.length > 3 && (
+          <TouchableOpacity 
+            style={styles.viewAllButton}
+            onPress={() => router.push('/(lecturer)/courses')}
+          >
+            <Text style={styles.viewAllText}>View All Courses</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Attendance Chart */}
+      {/* Recent Exams */}
       <View style={styles.chartCard}>
-        <Text style={styles.cardHeading}>Attendance Trend</Text>
-        <View style={styles.chartPlaceholder}>
-          <Text style={styles.placeholderText}>Chart will be displayed here</Text>
-        </View>
+        <Text style={styles.cardHeading}>Recent Exams</Text>
+        {exams.length > 0 ? (
+          exams.slice(0, 3).map(exam => (
+            <View key={exam.id} style={styles.courseItem}>
+              <Text style={styles.courseCode}>{exam.title}</Text>
+              <Text style={styles.courseName}>{exam.course} - {exam.course_name}</Text>
+              <Text style={styles.courseStudents}>
+                {formatDate(exam.date)} at {exam.time.substring(0, 5)}
+              </Text>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.placeholderText}>No exams created yet</Text>
+        )}
+        {exams.length > 3 && (
+          <TouchableOpacity 
+            style={styles.viewAllButton}
+            onPress={() => router.push('/(lecturer)/exams')}
+          >
+            <Text style={styles.viewAllText}>View All Exams</Text>
+          </TouchableOpacity>
+        )}
       </View>
-
-
-      <TouchableOpacity
-        style={[styles.button, styles.outlineButton, styles.logoutButton]}
-        onPress={() => {
-          router.push('/(lecturer)/answers');
-        }}
-      >
-        <Text style={styles.outlineButtonText}>Generate Answers</Text>
-      </TouchableOpacity>
-
-      {/* Logout Button */}
-      <TouchableOpacity
-        style={[styles.button, styles.outlineButton, styles.logoutButton]}
-        onPress={() => {
-          logout();
-          router.replace('/login');
-        }}
-      >
-        <Text style={styles.outlineButtonText}>Logout</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
 
+// Helper function to format date
+function formatDate(dateString) {
+  const options = { year: 'numeric', month: 'short', day: 'numeric' };
+  return new Date(dateString).toLocaleDateString(undefined, options);
+}
+
 const styles = StyleSheet.create({
+  // ... (keep all your existing styles the same)
+  // All the style definitions from your original code can remain unchanged
   // Layout Styles
   scrollContainer: {
     flexGrow: 1,
@@ -236,7 +324,39 @@ const styles = StyleSheet.create({
   },
   placeholderText: {
     fontSize: 14,
-    color: '#757575'
+    color: '#757575',
+    textAlign: 'center'
+  },
+
+  // Course Item Styles
+  courseItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee'
+  },
+  courseCode: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333'
+  },
+  courseName: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 4
+  },
+  courseStudents: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4
+  },
+  viewAllButton: {
+    padding: 10,
+    alignItems: 'center',
+    marginTop: 10
+  },
+  viewAllText: {
+    color: '#3F51B5',
+    fontWeight: '500'
   },
 
   // Button Styles

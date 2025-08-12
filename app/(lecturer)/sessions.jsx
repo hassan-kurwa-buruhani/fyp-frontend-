@@ -12,7 +12,8 @@ import {
   FlatList,
   Platform,
   ScrollView,
-  ActivityIndicator
+  ActivityIndicator,
+  Linking
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -31,6 +32,9 @@ export default function Sessions() {
   const [examPaper, setExamPaper] = useState(null);
   const [totalMarks, setTotalMarks] = useState('');
   const [loading, setLoading] = useState(false);
+  const [exams, setExams] = useState([]);
+  const [selectedExam, setSelectedExam] = useState(null);
+  const [examDetailsVisible, setExamDetailsVisible] = useState(false);
 
   const router = useRouter();
   const { user, tokens } = useAuth();
@@ -39,21 +43,30 @@ export default function Sessions() {
   useEffect(() => {
     if (!tokens?.access) return;
 
-    const fetchCourses = async () => {
+    const fetchData = async () => {
       try {
-        const response = await axios.get(`${baseUrl}/lecturer-course/`, {
-          headers: {
-            Authorization: `Bearer ${tokens.access}`,
-          },
-        });
-        setCourses(response.data);
+        const [coursesResponse, examsResponse] = await Promise.all([
+          axios.get(`${baseUrl}/lecturer-course/`, {
+            headers: {
+              Authorization: `Bearer ${tokens.access}`,
+            },
+          }),
+          axios.get(`${baseUrl}/exams/`, {
+            headers: {
+              Authorization: `Bearer ${tokens.access}`,
+            },
+          })
+        ]);
+        
+        setCourses(coursesResponse.data);
+        setExams(examsResponse.data);
       } catch (error) {
-        console.error('Failed to load courses:', error);
-        alert('Could not fetch courses. Please try again.');
+        console.error('Failed to load data:', error);
+        alert('Could not fetch data. Please try again.');
       }
     };
 
-    fetchCourses();
+    fetchData();
   }, [tokens]);
 
   const pickExamPaper = async () => {
@@ -73,6 +86,11 @@ export default function Sessions() {
 
   const formatTime = (date) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const formatDate = (dateString) => {
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
   const handleCreateExam = async () => {
@@ -116,6 +134,7 @@ export default function Sessions() {
       });
 
       const data = response.data;
+      setExams([...exams, data]);
       resetForm();
       router.push({
         pathname: '/(lecturer)/answersheet',
@@ -183,6 +202,124 @@ export default function Sessions() {
     );
   };
 
+  const renderExamItem = ({ item }) => (
+    <TouchableOpacity 
+      style={styles.examItem}
+      onPress={() => {
+        setSelectedExam(item);
+        setExamDetailsVisible(true);
+      }}
+    >
+      <View style={styles.examItemHeader}>
+        <Text style={styles.examTitle}>{item.title}</Text>
+        <Text style={styles.examCourse}>{item.course}</Text>
+      </View>
+      <View style={styles.examItemDetails}>
+        <Text style={styles.examDate}>{formatDate(item.date)}</Text>
+        <Text style={styles.examTime}>{item.time.substring(0, 5)}</Text>
+      </View>
+      <View style={styles.examStatusContainer}>
+        <View style={[
+          styles.examStatusBadge,
+          item.graded ? styles.gradedBadge : styles.pendingBadge
+        ]}>
+          <Text style={styles.examStatusText}>
+            {item.graded ? 'Graded' : 'Pending'}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderExamDetails = () => {
+    if (!selectedExam) return null;
+
+    return (
+      <Modal visible={examDetailsVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.detailsModalContainer}>
+            <ScrollView contentContainerStyle={styles.modalScrollContainer}>
+              <Text style={styles.modalTitle}>{selectedExam.title}</Text>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Course:</Text>
+                <Text style={styles.detailValue}>
+                  {selectedExam.course} - {selectedExam.course_name}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Date:</Text>
+                <Text style={styles.detailValue}>
+                  {formatDate(selectedExam.date)} at {selectedExam.time.substring(0, 5)}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Total Marks:</Text>
+                <Text style={styles.detailValue}>{selectedExam.total_marks}</Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Status:</Text>
+                <View style={[
+                  styles.statusBadge,
+                  selectedExam.graded ? styles.gradedBadge : styles.pendingBadge
+                ]}>
+                  <Text style={styles.statusText}>
+                    {selectedExam.graded ? 'Graded' : 'Pending'}
+                  </Text>
+                </View>
+              </View>
+
+              {selectedExam.exam_paper && (
+                <>
+                  <Text style={styles.sectionTitle}>Exam Paper</Text>
+                  <TouchableOpacity 
+                    style={styles.downloadButton}
+                    onPress={() => Linking.openURL(selectedExam.exam_paper)}
+                  >
+                    <MaterialIcons name="file-download" size={24} color="#fff" />
+                    <Text style={styles.downloadButtonText}>Download Exam Paper</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              <View style={styles.detailsButtonContainer}>
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.viewAnswersButton]}
+                  onPress={() => {
+                    setExamDetailsVisible(false);
+                    router.push({
+                      pathname: '/(lecturer)/student-answersheet',
+                      params: {
+                        id: selectedExam.id,
+                        name: selectedExam.title,
+                        course: selectedExam.course,
+                        course_name: selectedExam.course_name,
+                        time: selectedExam.time,
+                        marks: selectedExam.total_marks
+                      },
+                    });
+                  }}
+                >
+                  <Text style={styles.actionButtonText}>View Answer Sheets</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.actionButton, styles.closeButton]}
+                  onPress={() => setExamDetailsVisible(false)}
+                >
+                  <Text style={styles.actionButtonText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -190,25 +327,35 @@ export default function Sessions() {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Your Exam Sessions</Text>
-          {/* Future: Add list of existing sessions here */}
-          <View style={styles.emptyState}>
-            <MaterialIcons name="assignment" size={48} color="#aaa" />
-            <Text style={styles.emptyStateText}>No exams created yet</Text>
-          </View>
+          
+          {exams.length === 0 ? (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="assignment" size={48} color="#aaa" />
+              <Text style={styles.emptyStateText}>No exams created yet</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={exams}
+              renderItem={renderExamItem}
+              keyExtractor={item => item.id.toString()}
+              scrollEnabled={false}
+              contentContainerStyle={styles.examList}
+            />
+          )}
         </View>
       </ScrollView>
 
       {/* Floating Action Button */}
       <TouchableOpacity
-  style={styles.fabContainer}
-  onPress={() => setModalVisible(true)}
-  activeOpacity={0.8}
->
-  <View style={styles.fabContent}>
-    <MaterialIcons name="add" size={24} color="#fff" />
-    <Text style={styles.fabText}>New Session</Text>
-  </View>
-</TouchableOpacity>
+        style={styles.fabContainer}
+        onPress={() => setModalVisible(true)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.fabContent}>
+          <MaterialIcons name="add" size={24} color="#fff" />
+          <Text style={styles.fabText}>New Session</Text>
+        </View>
+      </TouchableOpacity>
 
       {/* Create Exam Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
@@ -322,6 +469,9 @@ export default function Sessions() {
           </View>
         </View>
       </Modal>
+
+      {/* Exam Details Modal */}
+      {renderExamDetails()}
     </View>
   );
 }
@@ -369,32 +519,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   fabContainer: {
-  position: 'absolute',
-  bottom: 30,
-  right: 10,
-  backgroundColor: '#007bff',
-  borderRadius: 28,
-  paddingHorizontal: 20,
-  paddingVertical: 12,
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'center',
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.3,
-  shadowRadius: 4,
-  elevation: 5,
-},
-fabContent: {
-  flexDirection: 'row',
-  alignItems: 'center',
-},
-fabText: {
-  color: '#fff',
-  fontSize: 16,
-  fontWeight: '600',
-  marginLeft: 3,
-},
+    position: 'absolute',
+    bottom: 30,
+    right: 10,
+    backgroundColor: '#007bff',
+    borderRadius: 28,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  fabContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fabText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 3,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -405,6 +555,13 @@ fabText: {
     marginHorizontal: 20,
     borderRadius: 12,
     maxHeight: '80%',
+  },
+  detailsModalContainer: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    borderRadius: 12,
+    maxHeight: '80%',
+    width: '90%',
   },
   modalScrollContainer: {
     padding: 20,
@@ -518,5 +675,137 @@ fabText: {
     color: '#dc3545',
     fontSize: 16,
     fontWeight: '600',
+  },
+  examList: {
+    paddingBottom: 10,
+  },
+  examItem: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007bff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  examItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  examTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  examCourse: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+    marginLeft: 10,
+  },
+  examItemDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  examDate: {
+    fontSize: 14,
+    color: '#666',
+  },
+  examTime: {
+    fontSize: 14,
+    color: '#666',
+  },
+  examStatusContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  examStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  examStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  pendingBadge: {
+    backgroundColor: '#ffc107',
+  },
+  gradedBadge: {
+    backgroundColor: '#28a745',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    marginBottom: 15,
+    alignItems: 'center',
+  },
+  detailLabel: {
+    fontWeight: '600',
+    color: '#555',
+    width: 100,
+  },
+  detailValue: {
+    flex: 1,
+    color: '#333',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 20,
+    marginBottom: 10,
+    color: '#444',
+  },
+  downloadButton: {
+    backgroundColor: '#007bff',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  downloadButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 10,
+  },
+  detailsButtonContainer: {
+    marginTop: 20,
+  },
+  actionButton: {
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  viewAnswersButton: {
+    backgroundColor: '#17a2b8',
+  },
+  closeButton: {
+    backgroundColor: '#6c757d',
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
