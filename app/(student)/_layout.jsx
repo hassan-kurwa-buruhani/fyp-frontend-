@@ -1,24 +1,10 @@
-import { Stack } from 'expo-router';
-import { useAuth } from '../../context/AuthContext';
+import { Slot } from 'expo-router';
+import Layout from '../template/Layout';
 
 export default function StudentLayout() {
-  const { user } = useAuth();
-  
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: '#fff' },
-        headerTintColor: '#333',
-        headerTitleStyle: { fontWeight: 'bold' },
-      }}
-    >
-      <Stack.Screen 
-        name="home" 
-        options={{ 
-          title: `Invigilator Dashboard`,
-          headerBackVisible: false,
-        }} 
-      />
-    </Stack>
+    <Layout>
+      <Slot />
+    </Layout>
   );
 }
